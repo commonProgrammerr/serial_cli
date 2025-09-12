@@ -2,9 +2,10 @@
 
 import os
 import re
-from importlib.metadata import version
 
 import rich_click as click
+
+import serial_cli
 
 click.rich_click.USE_RICH_MARKUP = True
 click.rich_click.USE_MARKDOWN = True
@@ -15,7 +16,7 @@ click.rich_click.APPEND_METAVARS_HELP = True
 
 
 @click.group()
-@click.version_option(version("serial-cli"))
+@click.version_option(serial_cli.__version__, "-v", "--version")
 def main():
     """Serial CLI Tool"""
 

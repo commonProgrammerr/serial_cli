@@ -48,3 +48,23 @@ readme = { file = ["README.md"] }
 
 [tool.setuptools_scm]
 write_to = "VERSION.txt"
+
+
+[tool.ruff]
+exclude = [".venv"]
+line-length = 79
+indent-width = 4
+target-version = "py312"
+lint.extend-select = ["I"]
+lint.extend-ignore = ["E203", "E701"]
+
+[tool.taskipy.tasks]
+lint = { help = "Run ruff Linter", cmd = "uvx ruff check ." }
+fmt = { help = "Run ruff formatter", cmd = "uvx ruff format .; uvx ruff check --select I --fix ." }
+clean = { help = "Clean environment", cmd = """\
+#! /usr/bin/env bash
+find ./ -name '*.pyc' -exec rm -f {} \\;
+find ./ -name '__pycache__' -exec rm -rf {} \\;
+find ./ -name 'Thumbs.db' -exec rm -f {} \\;
+find ./ -name '*~' -exec rm -f {} \\;
+rm -rf {.cache,.pytest_cache,.mypy_cache,htmlcov,docs/_build}""" }

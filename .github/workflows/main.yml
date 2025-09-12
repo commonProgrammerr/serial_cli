@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "main"
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - "main"
+
+  workflow_dispatch:
+
+
+jobs:
+  lint:
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ['3.12']
+        os: [ubuntu-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{matrix.python-version}}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Look for style errors
+        run: uv run task lint
+
+      - name: Check for importing style
+        run: uvx ruff format --diff relay_api
+
+  # TODO: enable when implement tests
+  # tests:
+  #   needs: lint
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       python-version: ['3.12']
+  #       os: [ubuntu-latest]
+  #   runs-on: ${{matrix.os}}
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - uses: actions/setup-python@v2
+  #       with:
+  #         python-version: ${{matrix.python-version}}
+  #     - name: Install uv
+  #       uses: astral-sh/setup-uv@v3
+
+  #     - name: Set up Python ${{ matrix.python-version }}
+  #       run: uv python install ${{ matrix.python-version }}
+
+  #     - name: Install the project
+  #       run: uv sync --all-extras --dev
+
+  #     - name: Run tests
+  #       run: |
+  #         uv run --extra test pytest -v --cov=relay_api --forked --junitxml=test-result.xml -n auto
+  #         uv run --extra test coverage xml
+
+  #     - name: Upload test results
+  #       uses: actions/upload-artifact@v4
+  #       if: always()
+  #       with:
+  #         name: test-results-${{ matrix.python-version }}-${{ matrix.os }}
+  #         path: |
+  #           test-result-*.xml
+  #           htmlcov/
+  #           coverage.xml
+  #         retention-days: 30
+
+  build-wheel:
+    needs: lint
+    name: "Build and upload artifacts"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(uv run python -c "import relay_api; print(relay_api.__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Build package
+        id: build
+        run: |
+          uv build
+          WHEEL_NAME=$(ls dist/*.whl | head -1 | xargs basename)
+          echo "wheel-name=$WHEEL_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+          retention-days: 90
+
+  create-release:
+    needs: [build-wheel]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    name: Create GitHub Release
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all snap artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: serial_cli-*
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "*.whl"
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

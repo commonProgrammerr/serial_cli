@@ -36,7 +36,7 @@ jobs:
         run: uv run task lint
 
       - name: Check for importing style
-        run: uvx ruff format --diff relay_api
+        run: uvx ruff format --diff serial_cli
 
   # TODO: enable when implement tests
   # tests:
@@ -63,7 +63,7 @@ jobs:
 
   #     - name: Run tests
   #       run: |
-  #         uv run --extra test pytest -v --cov=relay_api --forked --junitxml=test-result.xml -n auto
+  #         uv run --extra test pytest -v --cov=serial_cli --forked --junitxml=test-result.xml -n auto
   #         uv run --extra test coverage xml
 
   #     - name: Upload test results
@@ -97,7 +97,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(uv run python -c "import relay_api; print(relay_api.__version__)")
+          VERSION=$(uv run python -c "import serial_cli; print(serial_cli.__version__)")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 

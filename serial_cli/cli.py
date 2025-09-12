@@ -2,6 +2,7 @@
 
 import os
 import re
+from importlib.metadata import version
 
 import rich_click as click
 
@@ -14,11 +15,7 @@ click.rich_click.APPEND_METAVARS_HELP = True
 
 
 @click.group()
-@click.version_option(
-    open(os.path.join(os.path.dirname(__file__), "..", "VERSION.txt"))
-    .read()
-    .strip()
-)
+@click.version_option(version("serial-cli"))
 def main():
     """Serial CLI Tool"""
 

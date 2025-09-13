@@ -88,6 +88,36 @@ drwxr-xr-x  3 user user 4096 Sep 11 10:30 .
 - `exit` - Sair do shell
 - `clear` - Limpar a tela
 
+### Utilizando o runner
+
+O subcomando `run` permite executar comandos ou enviar dados para o dispositivo serial a partir de arquivos de texto ou da entrada padrão (stdin), facilitando automações e execuções em lote.
+
+```bash
+# Um só arquivo
+serial-cli run comandos.txt 
+
+# Ou múltiplos arquivos:
+serial-cli run comandos1.txt comandos2.txt
+
+# Com pipe operator
+cat comandos.txt | serial-cli run
+
+echo "send AT+GMR" | serial-cli run
+```
+
+#### Exemplo de arquivo de comandos
+
+Você pode criar um arquivo de texto (por exemplo, `comandos.txt`) com uma sequência de comandos para serem enviados ao dispositivo serial. No Serial CLI, o prefixo `!` executa comandos do sistema, e a sintaxe `!(comando)` é equivalente ao uso de `$()` no bash, ou seja, executa o comando e insere sua saída.
+
+Exemplo de conteúdo para `comandos.txt`:
+
+```bash
+send Olá, dispositivo! # envia o texto diretamente pela serial.
+!ls /dev/ttyUSB* # executa o comando no sistema e mostra a saída.
+!echo Teste direto do sistema # executa outro comando do sistema.
+send !(date) # executa o comando `date` no sistema e envia o resultado pela serial.
+```
+
 ### Recursos visuais
 - **Valores hexadecimais** são destacados em amarelo (ex: `0x41`, `0xFF`)
 - **Estatísticas** de transmissão são exibidas em ciano
@@ -135,13 +165,7 @@ serial_cli/
 ├── __init__.py
 ├── __main__.py          # Ponto de entrada como módulo
 ├── cli.py               # Interface de linha de comando
-└── __pycache__/
-```
-
-### Executar testes
-
-```bash
-pytest
+└── core.py              # Lógica principal do Serial CLI
 ```
 
 ### Contribuindo

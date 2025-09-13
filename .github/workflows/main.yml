@@ -1,4 +1,7 @@
-name: CI
+name: Deploy
+
+permissions:
+  contents: write
 
 on:
   push:
@@ -125,10 +128,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download all snap artifacts
+      - name: Download python package
         uses: actions/download-artifact@v4
         with:
-          pattern: serial_cli-*
+          pattern: python-package
           merge-multiple: true
 
       - name: Create Release

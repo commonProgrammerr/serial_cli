@@ -71,7 +71,7 @@ class SerialCLI(Serial):
             prompt_text = Text(f"{super().port}> ", style="bold green")
             stdin = self.console.input(prompt_text)
 
-            match stdin.lower():
+            match stdin.strip().split(" ", 1)[0]:
                 case "exit":
                     break
                 case "clear":
@@ -113,7 +113,7 @@ class SerialCLI(Serial):
                 )
 
     def exec(self, line: str):
-        match line.lower():
+        match line.strip():
             case line if line.startswith("!"):
                 sp = self._run_subcommand(line[1:].strip())
                 if sp.returncode > 0:

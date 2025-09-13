@@ -112,6 +112,16 @@ class SerialCLI(Serial):
                     f"[bold red]An unexpected error occurred:[/bold red] {e}"
                 )
 
+    def exec(self, line: str):
+        match line.lower():
+            case line if line.startswith("!"):
+                sp = self._run_subcommand(line[1:].strip())
+                if sp.returncode > 0:
+                    raise RuntimeError(f"Command fail: {line}")
+
+            case line if line.startswith("send "):
+                return self.send(line.removeprefix("send "))
+
     def send(self, text: str):
         subcommand_pattern = re.compile(r"!\(([^)]+)\)")
 

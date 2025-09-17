@@ -7,6 +7,7 @@ license = { text = "MIT" }
 dynamic = ["version", "readme"]
 dependencies = [
     "click>=8.2.1",
+    "prompt-toolkit>=3.0.52",
     "pyserial>=3.5",
     "rich>=14.1.0",
     "rich-click>=1.8.9",

@@ -171,6 +171,15 @@ class SerialCLI(Serial):
                 raise ValueError(f"Unknown command: {line}")
 
     def send(self, text: str):
+        """Sends data to the serial port.
+        Supports subcommands in the format !(command).
+        Subcommands are executed and their output is sent instead.
+
+        Args:
+            text (str): The text to send, may include subcommands.
+        Returns:
+            int: The number of bytes sent.
+        """
         subcommand_pattern = re.compile(r"!\(([^)]+)\)")
 
         for subcommand in subcommand_pattern.findall(text):
@@ -186,7 +195,14 @@ class SerialCLI(Serial):
         return len(output)
 
     def receive(self, arg: Union[int, bytes]) -> bytes:
+        """
+        Receives data from the serial port.
 
+        Args:
+            arg (int | bytes): If int, number of bytes to read. If bytes, end sequence to read until.
+        Returns:
+            bytes: The data read from the serial port.
+        """
         if isinstance(arg, int):
             result = self.read(arg)
         elif isinstance(arg, bytes):

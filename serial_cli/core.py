@@ -93,7 +93,7 @@ class SerialCLI(Serial):
                     auto_suggest=AutoSuggestFromHistory(),
                 )
                 if line.strip():
-                    self.exec(line, iterative=True)
+                    self.exec(line, verbose=True)
             except (EOFError, KeyboardInterrupt):
                 return
             except ValueError as e:

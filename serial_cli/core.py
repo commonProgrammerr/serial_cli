@@ -1,6 +1,8 @@
 import os
 import re
 import subprocess
+from fileinput import FileInput
+from typing import Union
 
 from prompt_toolkit import prompt
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -101,11 +103,26 @@ class SerialCLI(Serial):
                     f"[bold red]Command not found:[/bold red] {line[1:].strip().split(' ')[0]}",
                 )
 
+    def run_script(self, lines: FileInput):
+        line_no = 1
+        for line in lines:
+            try:
+                if line.strip():
+                    self.exec(line, iterative=True)
+            except (ValueError, RuntimeError) as e:
                 self.console.print(
+                    f"[bold red]Error on line {line_no}:[/bold red] {str(e)}"
                 )
+                break
             except FileNotFoundError:
                 self.console.print(
+                    f"[bold red]Command not found:[/bold red] {line_no}: {line[1:].strip().split(' ')[0]}"
                 )
+                break
+            except (EOFError, KeyboardInterrupt):
+                break
+            finally:
+                line_no += 1
 
     def exec(self, line: str, verbose=False):
         line = re.sub(r"#.*$", "", line)  # remove comments

@@ -10,6 +10,8 @@ Uma ferramenta de linha de comando para comunicação serial interativa, desenvo
 - 📊 **Monitoramento de dados**: Exibe estatísticas de bytes enviados/recebidos
 - 🔍 **Highlighting**: Destaque automático de valores hexadecimais nas respostas
 - 💻 **Comandos do sistema**: Execute comandos do terminal com `!comando`
+- 📜 **Execução de scripts**: Execute comandos em lote a partir de arquivos
+- 👁️ **Modo de monitoramento**: Visualize dados da porta serial em tempo real
 
 ## Instalação
 
@@ -40,19 +42,27 @@ pip install -e .
 Execute o Serial CLI com as configurações padrão:
 
 ```bash
-serial-cli shell
+serial-cli start
 ```
 
 ### Configuração de parâmetros
 
 ```bash
-serial-cli shell --port /dev/ttyUSB0 --baudrate 115200 --timeout 10
+serial-cli start --port /dev/ttyUSB0 --baudrate 115200 --timeout 10
 ```
 
 ### Executar como módulo Python
 
 ```bash
-python -m serial_cli shell
+python -m serial_cli start
+```
+
+### Monitoramento simples
+
+Para apenas monitorar dados da porta serial:
+
+```bash
+serial-cli connect --port /dev/ttyUSB0 --baudrate 115200
 ```
 
 ## Parâmetros de configuração
@@ -68,11 +78,16 @@ python -m serial_cli shell
 Após iniciar o Serial CLI, você entrará em um shell interativo onde pode:
 
 ### Enviar comandos seriais
-Digite qualquer texto e pressione Enter para enviá-lo via serial:
+Use o comando `send` para enviar dados via serial:
 ```
-/dev/ttyUSB0> AT
-OK
-Sent: 2b, Received: 4b
+/dev/ttyUSB0> send AT
+/dev/ttyUSB0> 
+```
+
+Para enviar e aguardar resposta automaticamente:
+```
+/dev/ttyUSB0> send --wait AT+GMR
+ESP32-C3 (revision 3)
 ```
 
 ### Executar comandos do sistema
@@ -85,24 +100,23 @@ drwxr-xr-x  3 user user 4096 Sep 11 10:30 .
 ```
 
 ### Comandos especiais
+- `send <dados>` - Enviar dados via serial
+- `send --wait <dados>` - Enviar dados e aguardar resposta
+- `read <bytes>` - Ler número específico de bytes
+- `read <terminator>` - Ler até encontrar terminador
 - `exit` - Sair do shell
 - `clear` - Limpar a tela
 
-### Utilizando o runner
+### Executar comandos de arquivos
 
-O subcomando `run` permite executar comandos ou enviar dados para o dispositivo serial a partir de arquivos de texto ou da entrada padrão (stdin), facilitando automações e execuções em lote.
+O comando `start` também permite executar comandos de arquivos:
 
 ```bash
-# Um só arquivo
-serial-cli run comandos.txt 
+# Executar comandos de um arquivo
+serial-cli start comandos.txt 
 
-# Ou múltiplos arquivos:
-serial-cli run comandos1.txt comandos2.txt
-
-# Com pipe operator
-cat comandos.txt | serial-cli run
-
-echo "send AT+GMR" | serial-cli run
+# Ou múltiplos arquivos
+serial-cli start comandos1.txt comandos2.txt
 ```
 
 #### Exemplo de arquivo de comandos
@@ -128,17 +142,17 @@ send !(date) # executa o comando `date` no sistema e envia o resultado pela seri
 
 ### Comunicação com Arduino
 ```bash
-serial-cli shell --port /dev/ttyACM0 --baudrate 9600
+serial-cli start --port /dev/ttyACM0 --baudrate 9600
 ```
 
 ### Comunicação com módulo ESP32
 ```bash
-serial-cli shell --port /dev/ttyUSB0 --baudrate 115200
+serial-cli start --port /dev/ttyUSB0 --baudrate 115200
 ```
 
 ### Windows com dispositivo USB
 ```bash
-serial-cli shell --port COM4 --baudrate 57600
+serial-cli start --port COM4 --baudrate 57600
 ```
 
 ## Tratamento de erros
@@ -151,6 +165,7 @@ O Serial CLI trata automaticamente os seguintes cenários:
 
 ## Dependências
 
+- **prompt-toolkit**: Interface interativa aprimorada
 - **click**: Interface de linha de comando
 - **pyserial**: Comunicação serial
 - **rich**: Interface rica no terminal

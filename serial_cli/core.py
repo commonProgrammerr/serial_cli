@@ -1,6 +1,13 @@
+import os
 import re
 import subprocess
+from fileinput import FileInput
+from typing import Union
 
+from prompt_toolkit import prompt
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.history import FileHistory
 from rich.console import Console
 from rich.text import Text
 from serial import Serial
@@ -8,6 +15,7 @@ from serial import Serial
 
 class SerialCLI(Serial):
     console: Console
+    history: FileHistory
 
     def __init__(
         self,
@@ -47,7 +55,7 @@ class SerialCLI(Serial):
         return re.sub(
             r"(0x[0-9A-Fa-f]{2})",
             r"[bold yellow]\1[/bold yellow]",
-            received.decode().strip(),
+            received.decode(errors="ignore").strip(),
         )
 
     def _run_subcommand(self, cmd: str, print_output=True):
@@ -66,63 +74,112 @@ class SerialCLI(Serial):
 
         return result
 
-    def shell(self):
+    def iterative_shell(self):
+        history_file = os.path.expanduser("~/.serial_cli_history")
+        self.console.print(
+            Text.assemble(
+                ("Entering interactive mode. Type ", "white"),
+                ("exit", "bold red"),
+                (" to quit.\n", "white"),
+            )
+        )
+        self.history = FileHistory(history_file)
+        styled_prompt = FormattedText([("fg:#00ff00", f"{self.port}> ")])
         while True:
-            prompt_text = Text(f"{super().port}> ", style="bold green")
-            stdin = self.console.input(prompt_text)
-
-            match stdin.strip().split(" ", 1)[0]:
-                case "exit":
-                    break
-                case "clear":
-                    self.console.clear()
-                    continue
-
             try:
-                # Check if this is a command for the terminal or text to send over serial
-                if stdin.strip().startswith("!"):
-                    # Terminal command (starts with !)
-                    command = stdin[1:].strip()
-                    self._run_subcommand(command)
-                    continue
-
-                # Send expanded text over serial
-                bytes_sent = self.send((stdin + "\n"))
-
-                # read all until receive \n\n or timeout
-                received = self.read_until(b"\n\n")
-
-                self.console.print(
-                    self._sanitize_output(received), style="white"
+                line = prompt(
+                    styled_prompt,
+                    history=self.history,
+                    auto_suggest=AutoSuggestFromHistory(),
                 )
-
-                self.console.print(
-                    f"Sent: {bytes_sent}b, Received: {len(received)}b",
-                    style="cyan",
-                )
-
-            except subprocess.CalledProcessError as e:
-                self.console.print(f"Error: {e.stderr}", style="red")
+                if line.strip():
+                    self.exec(line, verbose=True)
+            except (EOFError, KeyboardInterrupt):
+                return
+            except ValueError as e:
+                self.console.print(str(e), style="bold red")
             except FileNotFoundError:
                 self.console.print(
-                    f"[bold red]Command not found:[/bold red] {stdin}"
+                    f"[bold red]Command not found:[/bold red] {line[1:].strip().split(' ')[0]}",
                 )
-            except Exception as e:
+
+    def run_script(self, lines: FileInput):
+        line_no = 1
+        for line in lines:
+            try:
+                if line.strip():
+                    self.exec(line, iterative=True)
+            except (ValueError, RuntimeError) as e:
                 self.console.print(
-                    f"[bold red]An unexpected error occurred:[/bold red] {e}"
+                    f"[bold red]Error on line {line_no}:[/bold red] {str(e)}"
                 )
+                break
+            except FileNotFoundError:
+                self.console.print(
+                    f"[bold red]Command not found:[/bold red] {line_no}: {line[1:].strip().split(' ')[0]}"
+                )
+                break
+            except (EOFError, KeyboardInterrupt):
+                break
+            finally:
+                line_no += 1
 
-    def exec(self, line: str):
-        match line.strip():
-            case line if line.startswith("!"):
-                sp = self._run_subcommand(line[1:].strip())
-                if sp.returncode > 0:
-                    raise RuntimeError(f"Command fail: {line}")
+    def exec(self, line: str, verbose=False):
+        line = re.sub(r"#.*$", "", line)  # remove comments
+        if line.strip().startswith("!"):
+            sp = self._run_subcommand(line[1:].strip())
+            if sp.returncode > 0:
+                raise RuntimeError(f"Command fail: {line}")
+            return
 
-            case line if line.startswith("send "):
-                return self.send(line.removeprefix("send "))
+        match line.strip().split(" ", 1):
+            case ["clear", *_]:
+                self.console.clear()
+            case ["exit", *_]:
+                raise KeyboardInterrupt()
+            case ["read", total, *_] if re.match(r"^\d+$", total):
+                self.console.print(
+                    self._sanitize_output(self.read(int(total))),
+                    style="white",
+                )
+            case ["read", end, *_] if re.match(r"^\w+$", end):
+                self.console.print(
+                    self._sanitize_output(self.read_until(end.encode())),
+                    style="white",
+                )
+            case ["send", data] | ["write", data]:
+                if should_wait_response := "--wait" in data.split(" "):
+                    data = data.replace("--wait", "", 1).strip()
+
+                # send the rest of the line
+                bytes_sent = self.send(data)
+
+                if should_wait_response:
+                    # read all until receive \n\n or timeout
+                    bytes_received = self.receive(b"\n\n")
+
+                    self.console.print(
+                        self._sanitize_output(bytes_received), style="white"
+                    )
+
+                if verbose:
+                    self.console.print(
+                        f"Sent: {bytes_sent}b, Received: {len(bytes_received)}b",
+                        style="cyan",
+                    )
+            case _:
+                raise ValueError(f"Unknown command: {line}")
 
     def send(self, text: str):
+        """Sends data to the serial port.
+        Supports subcommands in the format !(command).
+        Subcommands are executed and their output is sent instead.
+
+        Args:
+            text (str): The text to send, may include subcommands.
+        Returns:
+            int: The number of bytes sent.
+        """
         subcommand_pattern = re.compile(r"!\(([^)]+)\)")
 
         for subcommand in subcommand_pattern.findall(text):
@@ -130,9 +187,79 @@ class SerialCLI(Serial):
             if sp.returncode > 0:
                 raise RuntimeError(f"Command fail: {subcommand}")
 
-            text = re.sub(f"!\\({subcommand}\\)", sp.stdout, text, 1)
+            text = subcommand_pattern.sub(sp.stdout, text, 1)
 
         output = text.encode()
         self.writelines(output.splitlines(True))
 
         return len(output)
+
+    def receive(self, arg: Union[int, bytes]) -> bytes:
+        """
+        Receives data from the serial port.
+
+        Args:
+            arg (int | bytes): If int, number of bytes to read. If bytes, end sequence to read until.
+        Returns:
+            bytes: The data read from the serial port.
+        """
+        if isinstance(arg, int):
+            result = self.read(arg)
+        elif isinstance(arg, bytes):
+            result = self.read_until(arg)
+        else:
+            raise ValueError(
+                "Argument must be int (size) or bytes (end sequence)"
+            )
+
+        return result
+
+    def listen(self):
+        """Listens for incoming data on the serial port."""
+
+        from rich.containers import Lines
+        from rich.layout import Layout
+        from rich.live import Live
+        from rich.panel import Panel
+
+        output = Lines(Text("", style="white"))
+        layout = Layout()
+        layout.split_column(Layout(name="console"))
+
+        layout["console"].update(
+            Panel(
+                renderable=output,
+                title=f"{self.port} Output",
+                style="italic blue",
+            )
+        )
+
+        def console_log(output_str: str):
+            nonlocal output
+            nonlocal layout
+            max_lines = (
+                layout["console"]
+                .render(self.console, self.console.options)[layout["console"]]
+                .region.height
+            )
+
+            new_lines = output_str.count("\n") + 1
+
+            if len(output) + new_lines >= max_lines and output:
+                for _ in range(new_lines):
+                    output and output.pop(0)
+            output.extend(
+                map("< [white]{}[/white]".format, output_str.splitlines(True))
+            )
+
+        try:
+            with Live(
+                layout, refresh_per_second=10, console=self.console
+            ) as live:
+                while True:
+                    if new_data := self.read_all():
+                        console_log(self._sanitize_output(new_data))
+                        live.refresh()
+
+        except KeyboardInterrupt:
+            return

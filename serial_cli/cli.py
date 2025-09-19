@@ -42,10 +42,23 @@ def main():
     type=click.INT,
     help="Set the timeout for serial communication",
 )
-def shell(port: str, baudrate: int, timeout: int):
+@click.argument("files", nargs=-1, type=click.Path(exists=True))
+def start(files: list[str], port: str, baudrate: int, timeout: int):
     """Start an interactive shell session."""
     with SerialCLI(port, baudrate, timeout=timeout) as serial:
-        serial.shell()
+        try:
+            if files:
+                import fileinput
+
+                serial.run_script(fileinput.input(files=files))
+            else:
+                serial.iterative_shell()
+
+        except Exception as e:
+            if "dev" in serial_cli.__version__:
+                serial.console.print_exception(e)
+            else:
+                serial.console.print(str(e), style="bold red")
 
 
 @main.command()
@@ -69,15 +82,7 @@ def shell(port: str, baudrate: int, timeout: int):
     type=click.INT,
     help="Set the timeout for serial communication",
 )
-@click.argument("files", nargs=-1, type=click.Path(exists=True))
-def run(files: list[str], port: str, baudrate: int, timeout: int):
-    """Start an interactive shell session."""
-    import fileinput
-
+def connect(port: str, baudrate: int, timeout: int):
+    """Connect to the serial port."""
     with SerialCLI(port, baudrate, timeout=timeout) as serial:
-        try:
-            with fileinput.input(files=files) as file:
-                for line in file:
-                    serial.exec(line)
-        except Exception as e:
-            serial.console.print(str(e), style="bold red")
+        serial.listen()

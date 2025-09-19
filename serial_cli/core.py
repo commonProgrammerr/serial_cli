@@ -55,7 +55,7 @@ class SerialCLI(Serial):
         return re.sub(
             r"(0x[0-9A-Fa-f]{2})",
             r"[bold yellow]\1[/bold yellow]",
-            received.decode().strip(),
+            received.decode(errors="ignore").strip(),
         )
 
     def _run_subcommand(self, cmd: str, print_output=True):
@@ -213,3 +213,53 @@ class SerialCLI(Serial):
             )
 
         return result
+
+    def listen(self):
+        """Listens for incoming data on the serial port."""
+
+        from rich.containers import Lines
+        from rich.layout import Layout
+        from rich.live import Live
+        from rich.panel import Panel
+
+        output = Lines(Text("", style="white"))
+        layout = Layout()
+        layout.split_column(Layout(name="console"))
+
+        layout["console"].update(
+            Panel(
+                renderable=output,
+                title=f"{self.port} Output",
+                style="italic blue",
+            )
+        )
+
+        def console_log(output_str: str):
+            nonlocal output
+            nonlocal layout
+            max_lines = (
+                layout["console"]
+                .render(self.console, self.console.options)[layout["console"]]
+                .region.height
+            )
+
+            new_lines = output_str.count("\n") + 1
+
+            if len(output) + new_lines >= max_lines and output:
+                for _ in range(new_lines):
+                    output and output.pop(0)
+            output.extend(
+                map("< [white]{}[/white]".format, output_str.splitlines(True))
+            )
+
+        try:
+            with Live(
+                layout, refresh_per_second=10, console=self.console
+            ) as live:
+                while True:
+                    if new_data := self.read_all():
+                        console_log(self._sanitize_output(new_data))
+                        live.refresh()
+
+        except KeyboardInterrupt:
+            return
